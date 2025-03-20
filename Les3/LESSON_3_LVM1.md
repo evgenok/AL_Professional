@@ -4,7 +4,6 @@
 Цель:
 создавать и управлять логическими томами в LVM;
 
-
 *Настроить LVM в Ubuntu 24.04 Server
 *Создать Physical Volume, Volume Group и Logical Volume
 *Отформатировать и смонтировать файловую систему
@@ -13,22 +12,8 @@
 *Проверить корректность работы
 
 
-LVM - logical volume manager. Подсистема ядра, позволяющая управлять дисковым пространством. Обеспечивает легкую масштабируемость логических разделов диска.
 
-ext4 = extand 4Mb. <--- минимальный размер раздела, кратный 4Mb
-
-
-| **Physical Volume (PV)** | **Volume Group (VG)**         | **Logical Volume (LV)**                     |
-| ------------------------ | ----------------------------- | ------------------------------------------- |
-| Физический диск          | Группа из физических дисков   | Виртуальный раздел в группе  		 |
-               
-| `pvcreate /dev/sdX`      | `vgcreate <vg_name> /dev/sdX` | `lvcreate -L <size> -n <lv_name> <vg_name>` |
-
-| Основа для создания VG.  | Основа для создания LV.       | LV используется для хранения данных.        |
-|                          |                               |                                             |
-
-
-//проверил подключение всех дисков, необходимых для работы (sdb,sdc,sdd)
+///проверил корректность подключения всех дисков, необходимых для работы (sdb,sdc,sdd)\\
 root@osboxes:~# lsblk
 NAME                      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
 sda                         8:0    0  500G  0 disk 
@@ -42,20 +27,19 @@ sdd                         8:48   0   10G  0 disk
 sr0                        11:0    1 1024M  0 rom  
 
 
-//создал physical volume, а затем volume group(с именем: vg1) из носителя sdb и sdc
+///создал два physical volume из носителя sdb и sdc\\ 
 root@osboxes:~# pvcreate /dev/sdb 
 Physical volume "/dev/sdb" successfully created.
-
-root@osboxes:~# vgcreate vg1 /dev/sdb
-Volume group "vg1" successfully extended
-
 root@osboxes:~# pvcreate /dev/sdc
 Physical volume "/dev/sdb" successfully created.
 
+///затем volume group(с именем: vg1) из носителя sdb и sdc\\
+root@osboxes:~# vgcreate vg1 /dev/sdb
+Volume group "vg1" successfully extended
 root@osboxes:~# vgcreate vg1 /dev/sdc
 Volume group "vg1" successfully extended
 
-//убедился в этом
+///убедился в этомm проверил наличие sdb и sdc в VG\\
 root@osboxes:~# pvs && vgs
   PV         VG        Fmt  Attr PSize    PFree   
   /dev/sda3  ubuntu-vg lvm2 a--  <498.00g <398.00g
@@ -66,7 +50,7 @@ root@osboxes:~# pvs && vgs
   ubuntu-vg   1   1   0 wz--n- <498.00g <398.00g
   vg1         2   0   0 wz--n-   19.99g   19.99g
 
-//создаем логический раздел logical volume (lv1 и lv2) на vg1, делаем файловую систему в lv1 и lv2 и убеждаемся в этом. Монтируем.
+///создаем логический раздел logical volume (lv1 и lv2) на vg1, делаем файловую систему в lv1 и lv2 и убеждаемся в этом\\
 root@osboxes:~# lvcreate -L 5G -n lv1 vg1
 Wiping ext4 signature on /dev/vg1/lv1.
   Logical volume "lv1" created.
@@ -97,8 +81,10 @@ Writing inode tables:  0/40     done
 Creating journal (2123384 blocks): done
 Writing superblocks and filesystem accounting information:  0/40     done
 
+///Монтируем\\
 root@osboxes:~# mount /dev/vg1/lv1 /mnt/01
 root@osboxes:~# mount /dev/vg1/lv2 /mnt/02
+
 root@osboxes:~# lsblk
 NAME                      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
 sda                         8:0    0  500G  0 disk 
@@ -114,20 +100,21 @@ sdc                         8:32   0   10G  0 disk
 sdd                         8:48   0   10G  0 disk 
 sr0                        11:0    1 1024M  0 rom 
 
-//приступим к добавлению нового диска к файловой системе
+///приступим к добавлению нового диска к файловой системе\\
 root@osboxes:~# pvcreate /dev/sdd 
 Physical volume "/dev/sdd" successfully created.
 
 root@osboxes:~# vgextend vg1 /dev/sdd
 Volume group "vg1" successfully extended
 
+///видно, что диск добавился к vg1(в столбце pv было 2, стало 3)\\
 root@osboxes:~# vgs
 
   VG        #PV #LV #SN Attr   VSize    VFree   
   ubuntu-vg   1   1   0 wz--n- <498.00g <398.00g
   vg1         3   2   0 wz--n-  <29.99g  <14.99g
 
-//изменили объем lv до 15Гб и сделали resize
+///изменили объем lv до 15Гб и сделали resize\\
 root@osboxes:~# lvresize -L 15G /dev/vg1/lv1
 Size of logical volume vg1/lv1 changed from 5.00 GiB (1280 extents) to 15.00 GiB (3840 extents).
 Logical volume vg1/lv1 successfully resized.
@@ -137,8 +124,9 @@ Filesystem at /dev/mapper/vg1-lv1 is mounted on /mnt/01; on-line resizing requir
 old_desc_blocks = 1, new_desc_blocks = 2
 The filesystem on /dev/mapper/vg1-lv1 is now 3932160 (4k) blocks long.
 
-//видно, что в итоге получилось. 3 физических носителя в vg1 общим объемом 30Gb, имеющие "на борту" 2 lv (lv1 и lv2), разбитые на 5Gb и 10Gb соответственно, но со свободным пространством 
-в vg1 14.99Gb, которое можно разбить еще на несколько логических
+///видно, что в итоге получилось. 3 физических носителя (sdb,sdc,sdd) в vg1 общим объемом 30Gb,
+имеющие "на борту" 2 lv (lv1 и lv2), разбитые на 5Gb и 10Gb соответственно, но со свободным пространством 
+в vg1 14.99Gb, которое можно разбить еще на несколько логических\\
 root@osboxes:~# pvs
 PV         VG        Fmt  Attr PSize    PFree   
   /dev/sda3  ubuntu-vg lvm2 a--  <498.00g <398.00g
