@@ -166,7 +166,7 @@ http {
       tags:
         - nginx-configuration
 
-   handlers:
+  handlers:
     - name: restart nginx
       systemd:
         name: nginx

@@ -1,0 +1,43 @@
+---
+- name: playbook for install nginx on server
+  hosts: all
+  become: true
+  vars:
+    nginx_listen_port: 8080
+
+  tasks:
+    - name: update apt packages
+      apt:
+        update_cache: yes
+      tags:
+        - update apt
+
+    - name: install nginx
+      apt:
+        name: nginx
+        state: latest
+      notify:
+        - restart nginx
+      tags:
+        - install nginx
+
+    - name: create config file
+      template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/nginx.conf
+      notify:
+        - reload nginx
+      tags:
+        - nginx-configuration
+
+  handlers:
+    - name: restart nginx
+      systemd:
+        name: nginx
+        state: restarted
+        enabled: yes
+
+    - name: reload nginx
+      systemd:
+        name: nginx
+        state: reloaded  
