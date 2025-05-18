@@ -13,6 +13,10 @@
 
 // Запустил командой vagrant up и подключился vagrant ssh
 
+// Проверил версию ядра
+uname -r
+4.18.0-277.el8.x86_64
+
 // Тут не обошелся без помощи ИИ. Заменяем стандартные репозитории на архивные (vault.centos.org)
 sudo sed -i 's|mirrorlist=http://mirrorlist.centos.org|//mirrorlist=http://mirrorlist.centos.org|g' /etc/yum.repos.d/CentOS-*
 sudo sed -i 's|//baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
