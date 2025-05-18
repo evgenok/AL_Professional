@@ -1,0 +1,75 @@
+ENV['VAGRANT_SERVER_URL'] = 'https://vagrant.elab.pro'
+
+MACHINES = {
+  :"kernel-update" => {
+    :box_name => "centos/8",
+    :box_version => "1.0.0",
+    :cpus => 2,
+    :memory => 1024,
+    :kernel_type => "lt"  # Добавлен параметр: "lt" (LTS) или "ml" (Mainline)
+  }
+}
+
+Vagrant.configure("2") do |config|
+  MACHINES.each do |boxname, boxconfig|
+    config.vm.synced_folder ".", "/vagrant", disabled: true
+    config.vm.define boxname do |box|
+      box.vm.box = boxconfig[:box_name]
+      box.vm.box_version = boxconfig[:box_version]
+      box.vm.host_name = boxname.to_s
+
+      box.vm.provider "virtualbox" do |v|
+        v.memory = boxconfig[:memory]
+        v.cpus = boxconfig[:cpus]
+        v.name = "centos8-custom-kernel"
+      end
+
+      # Провижининг для обновления ядра
+      box.vm.provision "shell", inline: <<-SHELL
+        # Переключаем репозитории на vault.centos.org
+        echo "Переход на архивные репозитории..."
+        sed -i 's|mirrorlist=http://mirrorlist.centos.org|#mirrorlist=http://mirrorlist.centos.org|g' /etc/yum.repos.d/CentOS-*
+        sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+        yum clean all
+        yum makecache
+
+        # Устанавливаем ELRepo
+        echo "Добавление ELRepo репозитория..."
+        rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+        yum install -y https://www.elrepo.org/elrepo-release-8.el8.elrepo.noarch.rpm
+
+        # Выбираем тип ядра из конфига
+        if [ "#{boxconfig[:kernel_type]}" == "ml" ]; then
+          KERNEL_PKG="kernel-ml"
+          echo "Установка Mainline ядра (6.x)..."
+        else
+          KERNEL_PKG="kernel-lt"
+          echo "Установка LTS ядра (5.4.x)..."
+        fi
+
+        yum --enablerepo=elrepo-kernel install -y $KERNEL_PKG
+
+        # Установка инструментов для разработки
+        echo "Установка зависимостей..."
+        yum install -y gcc make perl bison flex elfutils-libelf-devel
+
+        # Настройка загрузчика
+        echo "Обновление GRUB..."
+        grub2-mkconfig -o /boot/grub2/grub.cfg
+        grub2-set-default 0
+
+        # Планируем перезагрузку
+        echo "Запланирована перезагрузка..."
+        nohup bash -c 'sleep 5; reboot' &
+      SHELL
+
+      # Проверка после перезагрузки
+      box.vm.provision "shell", run: "always", inline: <<-SHELL
+        echo "=== Информация о ядре ==="
+        echo "Текущее ядро: $(uname -r)"
+        echo "Доступные ядра:"
+        rpm -q kernel
+      SHELL
+    end
+  end
+end
